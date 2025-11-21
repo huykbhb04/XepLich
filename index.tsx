@@ -1,12 +1,17 @@
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
+
+
+
+const LOGO_URL = "/assets/logo.jpg";
+
 
 // --- Constants & Config ---
 const SHEET_ID = '1GAg6TPB2U7URfTZnEz05IRaAXYrzTFDBFgspOTCLf4Q';
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
 
 const DAYS_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 const DAY_LABELS: Record<string, string> = {
   'Mon': 'Thứ 2',
   'Tue': 'Thứ 3',
@@ -212,6 +217,7 @@ const normalizeSheetData = (rows: string[][]) => {
 };
 
 type ScheduleType = Record<string, Record<number, string[]>>;
+type HistoryDataType = Record<string, ScheduleType>; // Key: Week Range string
 
 type Registration = {
   slots: string[];
@@ -236,40 +242,49 @@ const LoginScreen = ({ onLogin }: { onLogin: (u: string, p: string) => void }) =
   return (
     <div className="login-container">
       <div className="login-card">
-        <img src="https://file.rendit.io/n/s5K44Fj3z7.png" alt="Giao Cafe Logo" style={{height: '90px', marginBottom: '20px'}}/>
+        <img 
+          src={LOGO_URL} 
+          alt="Giao Cafe Logo" 
+          className="app-logo"
+        />
         <h2 style={{color: '#c05640', fontFamily: 'serif', marginBottom: '10px'}}>Đăng Nhập Quản Trị</h2>
         <p style={{color:'#6b5f53', marginBottom: '30px', fontSize: '0.9rem'}}>Vui lòng đăng nhập để truy cập hệ thống xếp lịch</p>
         <form onSubmit={handleSubmit}>
-            <input 
-              type="text" 
-              className="login-input" 
-              placeholder="Tên đăng nhập" 
-              value={username} 
-              onChange={e => {setUsername(e.target.value); setError('');}}
-            />
-            <input 
-              type="password" 
-              className="login-input" 
-              placeholder="Mật khẩu"
-              value={password} 
-              onChange={e => {setPassword(e.target.value); setError('');}} 
-            />
-            {error && <div style={{color: '#dc2626', marginBottom: '15px', fontSize:'0.9rem', fontWeight: '600'}}>⚠️ {error}</div>}
-            <button type="submit" className="btn-generate" style={{width: '100%', marginTop: '10px'}}>Đăng Nhập</button>
+          <input 
+            type="text" 
+            className="login-input" 
+            placeholder="Tên đăng nhập" 
+            value={username} 
+            onChange={e => {setUsername(e.target.value); setError('');}}
+          />
+          <input 
+            type="password" 
+            className="login-input" 
+            placeholder="Mật khẩu"
+            value={password} 
+            onChange={e => {setPassword(e.target.value); setError('');}} 
+          />
+          {error && <div style={{color: '#dc2626', marginBottom: '15px', fontSize:'0.9rem', fontWeight: '600'}}>⚠️ {error}</div>}
+          <button type="submit" className="btn-generate" style={{width: '100%', marginTop: '10px'}}>Đăng Nhập</button>
         </form>
       </div>
     </div>
-  )
-}
+  );
+};
 
-// --- Main Dashboard Component (Previously App) ---
+// --- Main Dashboard Component ---
 const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
   const [registrations, setRegistrations] = useState<Record<string, Registration>>({});
   const [dynamicEmployeeList, setDynamicEmployeeList] = useState(DEFAULT_EMPLOYEES);
-  
-  // This state holds the FINAL optimized schedule
+
+  const weekDates = useMemo(() => getNextWeekDates(), []);
+  const currentWeekKey = `${weekDates['Mon'].dateStr} - ${weekDates['Sun'].dateStr}`;
+
+  // 1. Lịch sử đã lưu trong localStorage
+  const [history, setHistory] = useState<HistoryDataType>({});
+  // 2. Lịch tuần hiện tại
   const [finalSchedule, setFinalSchedule] = useState<ScheduleType | null>(null);
-  
+
   const [showStaffDetails, setShowStaffDetails] = useState(false);
   const [showAssignedStats, setShowAssignedStats] = useState(false);
   const [selectedStaffDetail, setSelectedStaffDetail] = useState<string | null>(null);
@@ -277,29 +292,60 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const weekDates = useMemo(() => getNextWeekDates(), []);
+  // Load history + tuần hiện tại từ localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('GIAO_ROSTER_HISTORY_V2');
+      if (stored) {
+        const parsed: HistoryDataType = JSON.parse(stored);
+        setHistory(parsed);
+        if (parsed[currentWeekKey]) {
+          setFinalSchedule(parsed[currentWeekKey]);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load history from localStorage', e);
+    }
+  }, [currentWeekKey]);
 
+  const isCurrentWeekSaved = !!history[currentWeekKey];
+
+  // Load đăng ký từ Google Sheet
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const cacheBuster = new Date().getTime();
       const response = await fetch(`${SHEET_CSV_URL}&t=${cacheBuster}`);
-      
       if (!response.ok) throw new Error('Failed to fetch sheet data');
       const text = await response.text();
-      
       const rows = parseCSV(text);
       const data = normalizeSheetData(rows);
-      
       const regRecord: Record<string, Registration> = {};
       const foundNames = new Set<string>();
 
       data.forEach(item => {
-        regRecord[item.name] = {
-          slots: item.slots,
-          reason: item.reason
-        };
+        if (regRecord[item.name]) {
+          const existingSlots = new Set(regRecord[item.name].slots);
+          item.slots.forEach(s => existingSlots.add(s));
+
+          const currentReason = regRecord[item.name].reason;
+          const newReason = item.reason;
+          let mergedReason = currentReason;
+          if (newReason && !currentReason.includes(newReason)) {
+            mergedReason = currentReason ? `${currentReason} | ${newReason}` : newReason;
+          }
+
+          regRecord[item.name] = {
+            slots: Array.from(existingSlots),
+            reason: mergedReason
+          };
+        } else {
+          regRecord[item.name] = {
+            slots: item.slots,
+            reason: item.reason
+          };
+        }
         foundNames.add(item.name);
       });
 
@@ -312,7 +358,6 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 
       setDynamicEmployeeList(newEmployeeList);
       setRegistrations(regRecord);
-      setFinalSchedule(null); // Reset schedule when data reloads
       setLastUpdated(new Date());
     } catch (err: any) {
       console.error(err);
@@ -326,31 +371,32 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
     loadData();
   }, [loadData]);
 
-  // Statistics for REGISTRATION
+  // Thống kê đăng ký
   const stats = useMemo(() => {
     const totalStaff = dynamicEmployeeList.length;
     const registeredCount = Object.keys(registrations).length;
-    
+
     const staffDetails = dynamicEmployeeList.map(emp => {
       const reg = registrations[emp.name];
       if (!reg) {
-        return { 
-          ...emp, 
-          status: 'not-registered', 
-          count: 0, 
+        return {
+          ...emp,
+          status: 'not-registered',
+          count: 0,          totalSlots: 0,
           slots: [] as string[],
           reason: 'Chưa điền form đăng ký',
           isLowRegistration: false
         };
       }
-      
-      const daysRegistered = new Set(reg.slots.map((s: string) => s.split('-')[0])).size;
-      const isLowRegistration = daysRegistered < 4;
-      
+
+      const uniqueDays = new Set(reg.slots.map((s: string) => s.split('-')[0])).size;
+      const isLowRegistration = uniqueDays < 4;
+
       return {
         ...emp,
         status: 'registered',
-        count: daysRegistered,
+        count: uniqueDays,
+        totalSlots: reg.slots.length,
         slots: reg.slots,
         isLowRegistration,
         reason: reg.reason || (isLowRegistration ? 'Chưa điền lý do' : '')
@@ -368,76 +414,86 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
     return { totalStaff, registeredCount, staffDetails };
   }, [registrations, dynamicEmployeeList]);
 
-  // Statistics for ASSIGNED SHIFTS (Final Result)
-  const assignedStats = useMemo(() => {
-    if (!finalSchedule) return [];
+  const calculateShiftCounts = (schedule: ScheduleType | null, list: { name: string }[]) => {
     const counts: Record<string, number> = {};
-    dynamicEmployeeList.forEach(e => counts[e.name] = 0);
+    list.forEach(e => (counts[e.name] = 0));
+    if (!schedule) return counts;
 
     DAYS_ORDER.forEach(day => {
       SHIFTS.forEach(shift => {
-        finalSchedule[day][shift].forEach(name => {
+        (schedule[day]?.[shift] || []).forEach(name => {
           counts[name] = (counts[name] || 0) + 1;
         });
       });
     });
+    return counts;
+  };
 
-    return Object.entries(counts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => a.count - b.count); // Sort ascending (least shifts first)
-  }, [finalSchedule, dynamicEmployeeList]);
+  const assignedStats = useMemo(() => {
+    const currentCounts = calculateShiftCounts(finalSchedule, dynamicEmployeeList);
 
+    const otherWeeksHistory = { ...history };
+    delete otherWeeksHistory[currentWeekKey];
 
-  // --- CORE SCHEDULING ALGORITHM ---
+    const historicalCounts: Record<string, number> = {};
+    dynamicEmployeeList.forEach(e => (historicalCounts[e.name] = 0));
+
+    Object.values(otherWeeksHistory).forEach(pastSchedule => {
+      const weekCounts = calculateShiftCounts(pastSchedule, dynamicEmployeeList);
+      Object.entries(weekCounts).forEach(([name, count]) => {
+        historicalCounts[name] = (historicalCounts[name] || 0) + count;
+      });
+    });
+
+    return dynamicEmployeeList
+      .map(emp => {
+        const current = currentCounts[emp.name] || 0;
+        const past = historicalCounts[emp.name] || 0;
+        const total = current + past;
+        return { name: emp.name, current, total };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [finalSchedule, dynamicEmployeeList, history, currentWeekKey]);
+
+  // Thuật toán xếp ca
   const handleGenerate = () => {
+    if (isCurrentWeekSaved) return;
+
     const MAX_PER_SHIFT = 2;
     const newSchedule: ScheduleType = {};
-    
-    // Initialize structure
+
     DAYS_ORDER.forEach(day => {
       newSchedule[day] = { 1: [], 2: [], 3: [] };
     });
 
-    // Track total shifts assigned to balance load (Fairness)
     const assignedCounts: Record<string, number> = {};
-    dynamicEmployeeList.forEach(emp => assignedCounts[emp.name] = 0);
+    dynamicEmployeeList.forEach(emp => (assignedCounts[emp.name] = 0));
 
-    // Iterate Day by Day
     DAYS_ORDER.forEach(day => {
       SHIFTS.forEach(shift => {
-        // 1. Get all people who registered for this specific slot
         const registeredForSlot = Object.entries(registrations)
-          .filter(([name, data]: [string, Registration]) => data.slots.includes(`${day}-${shift}`))
+          .filter(([_, data]: [string, Registration]) => data.slots.includes(`${day}-${shift}`))
           .map(([name]) => name);
 
-        // 2. Filter candidates based on Constraints
         const validCandidates = registeredForSlot.filter(name => {
-          // RULE: Gap Check (Cannot do Ca 1 and Ca 3 without Ca 2)
           if (shift === 3) {
             const hasShift1 = newSchedule[day][1].includes(name);
             const hasShift2 = newSchedule[day][2].includes(name);
             if (hasShift1 && !hasShift2) {
-              return false; // Invalid: Would create a gap
+              return false;
             }
           }
           return true;
         });
 
-        // 3. Fairness Sort: Prioritize those with fewer shifts so far
         validCandidates.sort((a, b) => {
           const countA = assignedCounts[a] || 0;
           const countB = assignedCounts[b] || 0;
-          if (countA !== countB) {
-            return countA - countB; // Ascending: fewer shifts go first
-          }
-          // Random tie-breaker to avoid alphabetical bias
+          if (countA !== countB) return countA - countB;
           return Math.random() - 0.5;
         });
 
-        // 4. Select Top N (Max 2)
         const selected = validCandidates.slice(0, MAX_PER_SHIFT);
-
-        // 5. Assign
         newSchedule[day][shift] = selected;
         selected.forEach(name => {
           assignedCounts[name] = (assignedCounts[name] || 0) + 1;
@@ -447,6 +503,26 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 
     setFinalSchedule(newSchedule);
     setShowStaffDetails(false);
+  };
+
+  const handleSaveWeek = () => {
+    if (!finalSchedule) return;
+    if (isCurrentWeekSaved) return;
+
+    const confirmed = window.confirm(
+      `⚠️ XÁC NHẬN LƯU KẾT QUẢ\n\nBạn có chắc chắn muốn lưu lịch của tuần [${currentWeekKey}]?\n\n❗️ LƯU Ý: Sau khi lưu, bạn sẽ KHÔNG THỂ xếp lại lịch cho tuần này nữa. Dữ liệu sẽ được chốt để tính tổng tích lũy.`
+    );
+    if (!confirmed) return;
+
+    const newHistory: HistoryDataType = {
+      ...history,
+      [currentWeekKey]: finalSchedule
+    };
+
+    setHistory(newHistory);
+    localStorage.setItem('GIAO_ROSTER_HISTORY_V2', JSON.stringify(newHistory));
+
+    alert('✅ Đã lưu thành công! Lịch tuần này đã được chốt.');
   };
 
   const handleCloseModal = () => {
@@ -477,11 +553,11 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       )}
 
       <header className="app-header">
-        <img src="https://file.rendit.io/n/s5K44Fj3z7.png" alt="Giao Cafe Logo" className="app-logo" />
+        <img src={LOGO_URL} alt="Giao Cafe Logo" className="app-logo" />
         <h1>Lịch Làm Việc Tuần Sau</h1>
         <div style={{display:'flex', justifyContent:'center', alignItems:'center', gap:'15px', flexWrap:'wrap', marginTop: '10px'}}>
           <span style={{color: '#5e4b35', fontSize: '1.1rem', fontFamily: 'serif', fontStyle:'italic', background: '#fff', padding: '5px 15px', borderRadius: '20px', border: '1px solid #eaddd5'}}>
-             Tuần: <strong>{weekDates['Mon'].dateStr} - {weekDates['Sun'].dateStr}</strong>
+            Tuần: <strong>{weekDates['Mon'].dateStr} - {weekDates['Sun'].dateStr}</strong>
           </span>
           <button 
             onClick={loadData}
@@ -490,13 +566,13 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
             🔄 Làm mới
           </button>
           <button onClick={onLogout} className="btn-logout">
-             Đăng xuất
+            Đăng xuất
           </button>
         </div>
         {lastUpdated && (
-           <div style={{fontSize: '0.75rem', color: '#8d7f71', marginTop: '5px'}}>
-             Cập nhật lúc: {lastUpdated.toLocaleTimeString()}
-           </div>
+          <div style={{fontSize: '0.75rem', color: '#8d7f71', marginTop: '5px'}}>
+            Cập nhật lúc: {lastUpdated.toLocaleTimeString()}
+          </div>
         )}
       </header>
 
@@ -543,7 +619,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                         <span className="badge badge-gray">Chưa ĐK</span>
                       ) : (
                         <span className={`badge ${staff.isLowRegistration ? 'badge-red' : 'badge-green'}`}>
-                          {staff.count} buổi {staff.isLowRegistration ? '(!)' : ''}
+                          {staff.count} ngày {staff.isLowRegistration ? '(!)' : ''}
                         </span>
                       )}
                     </div>
@@ -571,28 +647,31 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 
                         {staff.status === 'registered' && (
                           <>
-                             <div className="detail-row">
-                                <strong>Số ngày đăng ký:</strong> {staff.count}/7
-                             </div>
+                            <div className="detail-row">
+                              <strong>Số ngày đăng ký:</strong> {staff.count}
+                            </div>
+                            <div className="detail-row">
+                              <strong>Tổng số ca đăng ký:</strong> {staff.totalSlots}
+                            </div>
 
-                             {staff.isLowRegistration && (
-                               <div className="alert-box">
-                                 <div style={{fontWeight: 'bold', marginBottom: '5px'}}>⚠️ Lưu ý: Đăng ký ít buổi</div>
-                                 <div>
-                                   <strong>Lý do:</strong> {staff.reason || 'Không có lý do'}
-                                 </div>
-                               </div>
-                             )}
+                            {staff.isLowRegistration && (
+                              <div className="alert-box">
+                                <div style={{fontWeight: 'bold', marginBottom: '5px'}}>⚠️ Lưu ý: Đăng ký ít buổi</div>
+                                <div>
+                                  <strong>Lý do:</strong> {staff.reason || 'Không có lý do'}
+                                </div>
+                              </div>
+                            )}
 
-                             <div className="detail-row">
-                               <strong>Các ca đã chọn:</strong>
-                               <div className="tags-cloud">
-                                 {staff.slots?.length > 0 ? staff.slots.map((s: string) => {
-                                    const [d, sh] = s.split('-');
-                                    return <span key={s} className="tag">{DAY_LABELS[d]} - Ca {sh}</span>
-                                 }) : <span>Không có ca nào</span>}
-                               </div>
-                             </div>
+                            <div className="detail-row">
+                              <strong>Các ca đã chọn:</strong>
+                              <div className="tags-cloud">
+                                {staff.slots?.length > 0 ? staff.slots.map((s: string) => {
+                                  const [d, sh] = s.split('-');
+                                  return <span key={s} className="tag">{DAY_LABELS[d]} - Ca {sh}</span>
+                                }) : <span>Không có ca nào</span>}
+                              </div>
+                            </div>
                           </>
                         )}
                       </div>
@@ -609,7 +688,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         </div>
       )}
 
-      {/* Modal Assigned Stats (UPDATED) */}
+      {/* Modal Assigned Stats (Result) */}
       {showAssignedStats && finalSchedule && (
         <div className="modal-backdrop" onClick={handleCloseModal}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '650px', height: 'auto', maxHeight: '85vh'}}>
@@ -627,30 +706,33 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {assignedStats.map((stat, idx) => {
-                     const barWidth = Math.min(100, (stat.count / 7) * 100);
-                     const colorStyle = getStaffColor(stat.name);
-                     return (
-                      <tr key={stat.name} style={{borderBottom: '1px solid #eee'}}>
-                        <td style={{padding: '12px', fontWeight: '500', color: '#2e261f'}}>
-                          {idx + 1}. {stat.name}
+                  {assignedStats.map(stat => {
+                    const barWidth = `${(stat.total / (assignedStats[0]?.total || 1)) * 100}%`;
+                    return (
+                      <tr key={stat.name} style={{borderBottom: '1px solid #e5e7eb'}}>
+                        <td style={{padding: '10px 12px', fontWeight: 500, color: '#4b3427'}}>
+                          {stat.name}
                         </td>
-                        <td style={{padding: '12px'}}>
-                          <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                            <div style={{flex: 1, background: '#f0f0f0', borderRadius: '6px', height: '20px', overflow: 'hidden'}}>
+                        <td style={{padding: '10px 12px'}}>
+                          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                            <div style={{flex: 1, height: '8px', background: '#f3f4f6', borderRadius: '999px', overflow: 'hidden'}}>
                               <div style={{
-                                width: `${barWidth}%`, 
-                                background: stat.count < 3 ? '#ef5350' : (stat.count > 6 ? '#66bb6a' : colorStyle.text),
+                                width: barWidth,
                                 height: '100%',
-                                borderRadius: '6px',
-                                transition: 'width 0.5s ease'
-                              }}></div>
+                                background: 'linear-gradient(90deg, #fb923c, #f97316)',
+                                borderRadius: '999px'
+                              }} />
                             </div>
-                            <span style={{fontWeight: 'bold', minWidth: '30px'}}>{stat.count}</span>
+                            <span style={{fontSize: '0.9rem', fontWeight: 600}}>{stat.total}</span>
                           </div>
+                          {stat.current > 0 && (
+                            <div style={{fontSize: '0.85rem', color: '#4b5563', marginTop: '4px'}}>
+                              Tuần này: <strong>{stat.current}</strong> ca
+                            </div>
+                          )}
                         </td>
                       </tr>
-                     );
+                    );
                   })}
                 </tbody>
               </table>
@@ -670,24 +752,47 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
             </p>
           </div>
         ) : (
-           <div className="generated-state">
-             <div style={{display:'flex', justifyContent:'center', gap:'15px', marginBottom: '15px'}}>
-                <button className="btn-outline" onClick={() => setShowAssignedStats(true)}>
-                  📊 Xem Thống Kê Phân Công
-                </button>
-                <button className="btn-generate" style={{backgroundColor: '#57534e'}} onClick={handleGenerate}>
-                  🔄 Xếp Lại Lịch
-                </button>
-             </div>
-             <div className="text-success" style={{fontWeight: 'bold', fontSize: '1.1rem', display:'flex', alignItems:'center', justifyContent: 'center', gap:'8px', color: '#15803d'}}>
-               ✅ Đã tối ưu lịch xong!
-             </div>
-           </div>
+          <div className="generated-state">
+            <div style={{display:'flex', justifyContent:'center', gap:'15px', marginBottom: '15px'}}>
+              <button className="btn-outline" onClick={() => setShowAssignedStats(true)}>
+                📊 Xem Thống Kê Phân Công
+              </button>
+              <button
+                className="btn-generate"
+                style={{backgroundColor: isCurrentWeekSaved ? '#ccc' : '#57534e', cursor: isCurrentWeekSaved ? 'not-allowed' : 'pointer'}}
+                onClick={handleGenerate}
+                disabled={isCurrentWeekSaved}
+              >
+                {isCurrentWeekSaved ? '🔒 Đã Chốt Lịch' : '🔄 Xếp Lại Lịch'}
+              </button>
+              <button
+                className="btn-generate"
+                onClick={handleSaveWeek}
+                disabled={isCurrentWeekSaved}
+                style={{
+                  backgroundColor: '#059669',
+                  cursor: isCurrentWeekSaved ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isCurrentWeekSaved ? '✅ Đã Lưu Vào Hệ Thống' : '💾 Lưu Kết Quả Tuần Này'}
+              </button>
+            </div>
+            {isCurrentWeekSaved ? (
+              <div style={{color: '#dc2626', fontSize: '0.9rem', marginBottom: '10px', fontStyle:'italic', fontWeight: 'bold'}}>
+                🔒 Lịch tuần này đã được chốt và lưu vào dữ liệu tổng. Không thể thay đổi.
+              </div>
+            ) : (
+              <div className="text-success" style={{fontWeight: 'bold', fontSize: '1.1rem', display:'flex', alignItems:'center', justifyContent: 'center', gap:'8px', color: '#15803d'}}>
+                ✅ Đã tối ưu lịch xong!
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {finalSchedule && (
         <div className="schedule-container fade-in">
+          {/* Desktop: bảng */}
           <div className="table-responsive">
             <table className="new-schedule-table">
               <thead>
@@ -714,7 +819,6 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                     {DAYS_ORDER.map(day => {
                       const staffList = finalSchedule[day][shift];
                       const { isWeekend } = weekDates[day];
-                      // Visual alert for shortage
                       let cellStatusClass = '';
                       if (staffList.length === 0) cellStatusClass = 'missing-slot';
                       else if (staffList.length === 1) cellStatusClass = 'single-slot';
@@ -747,6 +851,62 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile: card theo ngày */}
+          <div className="mobile-schedule">
+            {DAYS_ORDER.map(day => {
+              const { dateStr } = weekDates[day];
+              return (
+                <div key={day} className="mobile-day-card">
+                  <div className="mobile-day-header">
+                    <div className="day-name">{DAY_LABELS[day]}</div>
+                    <div className="day-date">{dateStr}</div>
+                  </div>
+                  <div className="mobile-shift-list">
+                    {SHIFTS.map(shift => {
+                      const staffList = finalSchedule[day][shift];
+                      let cellStatusClass = '';
+                      if (staffList.length === 0) cellStatusClass = 'missing-slot';
+                      else if (staffList.length === 1) cellStatusClass = 'single-slot';
+
+                      return (
+                        <div key={`${day}-${shift}`} className="mobile-shift-row">
+                          <div className="mobile-shift-label">
+                            <div className="shift-name">Ca {shift}</div>
+                            <div className="shift-time">{SHIFT_TIMES[shift]}</div>
+                          </div>
+                          <div className={`mobile-shift-content ${cellStatusClass}`}>
+                            {staffList.length > 0 ? (
+                              <div style={{display: 'flex', flexDirection: 'column', gap: '6px'}}>
+                                {staffList.map((name: string) => {
+                                  const style = getStaffColor(name);
+                                  return (
+                                    <div
+                                      key={name}
+                                      className="staff-chip"
+                                      style={{
+                                        backgroundColor: style.bg,
+                                        border: `1px solid ${style.border}`,
+                                        color: style.text
+                                      }}
+                                    >
+                                      {name}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="empty-dash">-</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -756,21 +916,20 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check for existing session
   useEffect(() => {
-      const isLogged = sessionStorage.getItem('isLoggedIn');
-      if (isLogged === 'true') setIsAuthenticated(true);
+    const isLogged = sessionStorage.getItem('isLoggedIn');
+    if (isLogged === 'true') setIsAuthenticated(true);
   }, []);
 
   const handleLogin = () => {
-      sessionStorage.setItem('isLoggedIn', 'true');
-      setIsAuthenticated(true);
-  }
+    sessionStorage.setItem('isLoggedIn', 'true');
+    setIsAuthenticated(true);
+  };
 
   const handleLogout = () => {
-      sessionStorage.removeItem('isLoggedIn');
-      setIsAuthenticated(false);
-  }
+    sessionStorage.removeItem('isLoggedIn');
+    setIsAuthenticated(false);
+  };
 
   if (!isAuthenticated) return <LoginScreen onLogin={handleLogin} />;
 
