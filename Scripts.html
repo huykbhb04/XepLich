@@ -1,0 +1,9 @@
+<script>
+  // Đây là nơi code Javascript Frontend sẽ chạy
+  document.addEventListener('DOMContentLoaded', function() {
+    var app = document.getElementById('app');
+    if(typeof SERVER_DATA !== 'undefined') {
+      app.innerHTML = '<h1>Dữ liệu đã tải thành công!</h1><p>Vui lòng mở Console (F12) để xem JSON.</p>';
+    }
+  });
+</script>
