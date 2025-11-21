@@ -1,10 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 
-
-
 const LOGO_URL = "/assets/logo.jpg";
-
 
 // --- Constants & Config ---
 const SHEET_ID = '1GAg6TPB2U7URfTZnEz05IRaAXYrzTFDBFgspOTCLf4Q';
@@ -247,8 +244,19 @@ const LoginScreen = ({ onLogin }: { onLogin: (u: string, p: string) => void }) =
           alt="Giao Cafe Logo" 
           className="app-logo"
         />
-        <h2 style={{color: '#c05640', fontFamily: 'serif', marginBottom: '10px'}}>Đăng Nhập Quản Trị</h2>
-        <p style={{color:'#6b5f53', marginBottom: '30px', fontSize: '0.9rem'}}>Vui lòng đăng nhập để truy cập hệ thống xếp lịch</p>
+        <h2
+          style={{
+            color: '#c05640',
+            fontFamily: '"Playfair Display", serif',
+            marginBottom: '10px',
+            fontWeight: 700,
+          }}
+        >
+          Đăng Nhập Quản Trị
+        </h2>
+        <p style={{color:'#6b5f53', marginBottom: '30px', fontSize: '0.9rem'}}>
+          Vui lòng đăng nhập để truy cập hệ thống xếp lịch
+        </p>
         <form onSubmit={handleSubmit}>
           <input 
             type="text" 
@@ -264,8 +272,25 @@ const LoginScreen = ({ onLogin }: { onLogin: (u: string, p: string) => void }) =
             value={password} 
             onChange={e => {setPassword(e.target.value); setError('');}} 
           />
-          {error && <div style={{color: '#dc2626', marginBottom: '15px', fontSize:'0.9rem', fontWeight: '600'}}>⚠️ {error}</div>}
-          <button type="submit" className="btn-generate" style={{width: '100%', marginTop: '10px'}}>Đăng Nhập</button>
+          {error && (
+            <div
+              style={{
+                color: '#dc2626',
+                marginBottom: '15px',
+                fontSize:'0.9rem',
+                fontWeight: 600
+              }}
+            >
+              ⚠️ {error}
+            </div>
+          )}
+          <button
+            type="submit"
+            className="btn-generate"
+            style={{width: '100%', marginTop: '10px', fontWeight: 600}}
+          >
+            Đăng Nhập
+          </button>
         </form>
       </div>
     </div>
@@ -382,7 +407,8 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         return {
           ...emp,
           status: 'not-registered',
-          count: 0,          totalSlots: 0,
+          count: 0,
+          totalSlots: 0,
           slots: [] as string[],
           reason: 'Chưa điền form đăng ký',
           isLowRegistration: false
@@ -534,9 +560,11 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
   if (error) {
     return (
       <div className="container" style={{textAlign: 'center', padding: '50px', color: 'red'}}>
-        <h2>⚠️ Lỗi tải dữ liệu</h2>
+        <h2 style={{fontWeight: 700}}>⚠️ Lỗi tải dữ liệu</h2>
         <p>{error}</p>
-        <button onClick={loadData} className="btn-outline" style={{marginTop:'10px'}}>Thử lại</button>
+        <button onClick={loadData} className="btn-outline" style={{marginTop:'10px', fontWeight: 500}}>
+          Thử lại
+        </button>
       </div>
     );
   }
@@ -546,7 +574,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       {isLoading && (
         <div className="loading-overlay">
           <div style={{textAlign:'center'}}>
-            <h2 style={{marginBottom:'10px', color: '#c05640'}}>Đang tải dữ liệu...</h2>
+            <h2 style={{marginBottom:'10px', color: '#c05640', fontWeight: 700}}>
+              Đang tải dữ liệu...
+            </h2>
             <p style={{color:'#666'}}>Đang đồng bộ từ Google Sheet</p>
           </div>
         </div>
@@ -554,24 +584,55 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 
       <header className="app-header">
         <img src={LOGO_URL} alt="Giao Cafe Logo" className="app-logo" />
-        <h1>Lịch Làm Việc Tuần Sau</h1>
-        <div style={{display:'flex', justifyContent:'center', alignItems:'center', gap:'15px', flexWrap:'wrap', marginTop: '10px'}}>
-          <span style={{color: '#5e4b35', fontSize: '1.1rem', fontFamily: 'serif', fontStyle:'italic', background: '#fff', padding: '5px 15px', borderRadius: '20px', border: '1px solid #eaddd5'}}>
-            Tuần: <strong>{weekDates['Mon'].dateStr} - {weekDates['Sun'].dateStr}</strong>
+        <h1
+          style={{
+            fontFamily: '"Playfair Display", serif',
+            fontWeight: 700,
+          }}
+        >
+          Lịch Làm Việc Tuần Sau
+        </h1>
+        <div
+          style={{
+            display:'flex',
+            justifyContent:'center',
+            alignItems:'center',
+            gap:'15px',
+            flexWrap:'wrap',
+            marginTop: '10px'
+          }}
+        >
+          <span
+            style={{
+              color: '#5e4b35',
+              fontSize: '1.05rem',
+              fontFamily: '"Playfair Display", serif',
+              fontStyle:'italic',
+              background: '#fff',
+              padding: '5px 15px',
+              borderRadius: '20px',
+              border: '1px solid #eaddd5'
+            }}
+          >
+            <strong>Tuần:</strong>{' '}
+            <strong>
+              {weekDates['Mon'].dateStr} - {weekDates['Sun'].dateStr}
+            </strong>
           </span>
           <button 
             onClick={loadData}
             className="btn-refresh"
+            style={{fontWeight: 500}}
           >
             🔄 Làm mới
           </button>
-          <button onClick={onLogout} className="btn-logout">
+          <button onClick={onLogout} className="btn-logout" style={{fontWeight: 500}}>
             Đăng xuất
           </button>
         </div>
         {lastUpdated && (
           <div style={{fontSize: '0.75rem', color: '#8d7f71', marginTop: '5px'}}>
-            Cập nhật lúc: {lastUpdated.toLocaleTimeString()}
+            Cập nhật lúc: <strong>{lastUpdated.toLocaleTimeString()}</strong>
           </div>
         )}
       </header>
@@ -580,19 +641,36 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         <div className="stat-box" onClick={() => setShowStaffDetails(true)}>
           <div className="stat-icon">👥</div>
           <div className="stat-info">
-            <div className="stat-label">Tiến độ đăng ký</div>
+            <div className="stat-label">
+              <strong>Tiến độ đăng ký</strong>
+            </div>
             <div className="stat-value">
-              <span className={stats.registeredCount < stats.totalStaff ? 'text-warning' : 'text-success'}>
+              <span
+                className={stats.registeredCount < stats.totalStaff ? 'text-warning' : 'text-success'}
+                style={{fontWeight: 700}}
+              >
                 {stats.registeredCount}
               </span>
-              <span className="text-muted" style={{fontSize: '1.5rem'}}>/ {stats.totalStaff}</span>
+              <span className="text-muted" style={{fontSize: '1.2rem'}}>
+                / {stats.totalStaff}
+              </span>
             </div>
             <div className="stat-hint">
               {stats.totalStaff - stats.registeredCount > 0 
-                ? `${stats.totalStaff - stats.registeredCount} bạn chưa nộp` 
-                : 'Đã đủ người'}
+                ? <span><strong>{stats.totalStaff - stats.registeredCount}</strong> bạn chưa nộp</span>
+                : <span><strong>Đã đủ người</strong></span>}
             </div>
-            <div style={{marginTop: '5px', fontSize: '0.8rem', color: '#c05640', textDecoration: 'underline'}}>Xem chi tiết</div>
+            <div
+              style={{
+                marginTop: '5px',
+                fontSize: '0.8rem',
+                color: '#c05640',
+                textDecoration: 'underline',
+                fontWeight: 600
+              }}
+            >
+              Xem chi tiết
+            </div>
           </div>
         </div>
       </div>
@@ -602,7 +680,16 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         <div className="modal-backdrop" onClick={handleCloseModal}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 style={{fontFamily: 'serif', color: '#c05640', margin: 0}}>📋 Tình trạng đăng ký</h2>
+              <h2
+                style={{
+                  fontFamily: '"Playfair Display", serif',
+                  color: '#c05640',
+                  margin: 0,
+                  fontWeight: 700
+                }}
+              >
+                📋 Tình trạng đăng ký
+              </h2>
               <button className="close-btn" onClick={handleCloseModal}>&times;</button>
             </div>
             <div className="staff-list-layout">
@@ -613,7 +700,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                     className={`staff-item ${selectedStaffDetail === staff.name ? 'active' : ''} ${staff.isLowRegistration ? 'warning' : ''}`}
                     onClick={() => setSelectedStaffDetail(staff.name)}
                   >
-                    <div className="staff-name">{staff.name}</div>
+                    <div className="staff-name">
+                      <strong>{staff.name}</strong>
+                    </div>
                     <div className="staff-status">
                       {staff.status === 'not-registered' ? (
                         <span className="badge badge-gray">Chưa ĐK</span>
@@ -634,7 +723,16 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                     if (!staff) return null;
                     return (
                       <div>
-                        <h3 style={{marginBottom: '20px', borderBottom: '2px solid #f0ece4', paddingBottom: '10px', color: '#c05640', fontFamily: 'serif'}}>
+                        <h3
+                          style={{
+                            marginBottom: '20px',
+                            borderBottom: '2px solid #f0ece4',
+                            paddingBottom: '10px',
+                            color: '#c05640',
+                            fontFamily: '"Playfair Display", serif',
+                            fontWeight: 700
+                          }}
+                        >
                           {staff.name}
                         </h3>
                         
@@ -648,10 +746,12 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                         {staff.status === 'registered' && (
                           <>
                             <div className="detail-row">
-                              <strong>Số ngày đăng ký:</strong> {staff.count}
+                              <strong>Số ngày đăng ký:</strong>{' '}
+                              <span style={{fontWeight: 600}}>{staff.count}</span>
                             </div>
                             <div className="detail-row">
-                              <strong>Tổng số ca đăng ký:</strong> {staff.totalSlots}
+                              <strong>Tổng số ca đăng ký:</strong>{' '}
+                              <span style={{fontWeight: 600}}>{staff.totalSlots}</span>
                             </div>
 
                             {staff.isLowRegistration && (
@@ -668,7 +768,11 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                               <div className="tags-cloud">
                                 {staff.slots?.length > 0 ? staff.slots.map((s: string) => {
                                   const [d, sh] = s.split('-');
-                                  return <span key={s} className="tag">{DAY_LABELS[d]} - Ca {sh}</span>
+                                  return (
+                                    <span key={s} className="tag">
+                                      <strong>{DAY_LABELS[d]}</strong> - Ca {sh}
+                                    </span>
+                                  );
                                 }) : <span>Không có ca nào</span>}
                               </div>
                             </div>
@@ -691,18 +795,52 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       {/* Modal Assigned Stats (Result) */}
       {showAssignedStats && finalSchedule && (
         <div className="modal-backdrop" onClick={handleCloseModal}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '650px', height: 'auto', maxHeight: '85vh'}}>
+          <div
+            className="modal-content"
+            onClick={e => e.stopPropagation()}
+            style={{maxWidth: '650px', height: 'auto', maxHeight: '85vh'}}
+          >
             <div className="modal-header">
-              <h2 style={{fontFamily: 'serif', color: '#c05640', margin: 0}}>📊 Thống kê tổng số ca</h2>
+              <h2
+                style={{
+                  fontFamily: '"Playfair Display", serif',
+                  color: '#c05640',
+                  margin: 0,
+                  fontWeight: 700
+                }}
+              >
+                📊 Thống kê tổng số ca
+              </h2>
               <button className="close-btn" onClick={handleCloseModal}>&times;</button>
             </div>
             <div style={{padding: '25px', overflowY: 'auto'}}>
-              <p style={{color:'#666', marginBottom: '20px', fontStyle:'italic'}}>Danh sách được sắp xếp từ người làm ít ca nhất.</p>
+              <p style={{color:'#666', marginBottom: '20px', fontStyle:'italic'}}>
+                Danh sách được sắp xếp từ người làm{' '}
+                <strong>nhiều ca nhất</strong> đến ít.
+              </p>
               <table style={{width: '100%', borderCollapse: 'collapse'}}>
                 <thead>
                   <tr style={{background: '#f3f0eb', textAlign: 'left'}}>
-                    <th style={{padding: '12px', borderBottom: '2px solid #eaddd5', width:'40%'}}>Nhân viên</th>
-                    <th style={{padding: '12px', borderBottom: '2px solid #eaddd5', width:'60%'}}>Số lượng ca</th>
+                    <th
+                      style={{
+                        padding: '12px',
+                        borderBottom: '2px solid #eaddd5',
+                        width:'40%',
+                        fontWeight: 700
+                      }}
+                    >
+                      Nhân viên
+                    </th>
+                    <th
+                      style={{
+                        padding: '12px',
+                        borderBottom: '2px solid #eaddd5',
+                        width:'60%',
+                        fontWeight: 700
+                      }}
+                    >
+                      Số lượng ca (tích lũy)
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -715,19 +853,32 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                         </td>
                         <td style={{padding: '10px 12px'}}>
                           <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                            <div style={{flex: 1, height: '8px', background: '#f3f4f6', borderRadius: '999px', overflow: 'hidden'}}>
-                              <div style={{
-                                width: barWidth,
-                                height: '100%',
-                                background: 'linear-gradient(90deg, #fb923c, #f97316)',
-                                borderRadius: '999px'
-                              }} />
+                            <div
+                              style={{
+                                flex: 1,
+                                height: '8px',
+                                background: '#f3f4f6',
+                                borderRadius: '999px',
+                                overflow: 'hidden'
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: barWidth,
+                                  height: '100%',
+                                  background: 'linear-gradient(90deg, #fb923c, #f97316)',
+                                  borderRadius: '999px'
+                                }}
+                              />
                             </div>
-                            <span style={{fontSize: '0.9rem', fontWeight: 600}}>{stat.total}</span>
+                            <span style={{fontSize: '0.9rem', fontWeight: 700}}>
+                              {stat.total}
+                            </span>
                           </div>
                           {stat.current > 0 && (
                             <div style={{fontSize: '0.85rem', color: '#4b5563', marginTop: '4px'}}>
-                              Tuần này: <strong>{stat.current}</strong> ca
+                              Tuần này:{' '}
+                              <strong>{stat.current}</strong> ca
                             </div>
                           )}
                         </td>
@@ -744,22 +895,30 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       <div className="action-area">
         {!finalSchedule ? (
           <div className="initial-state">
-            <button className="btn-generate" onClick={handleGenerate}>
+            <button className="btn-generate" onClick={handleGenerate} style={{fontWeight: 600}}>
               ✨ Tạo & Tối Ưu Lịch
             </button>
             <p style={{marginTop: '10px', color: '#8d7f71', fontSize: '0.9rem'}}>
-              (Tự động xếp tối đa 2 người/ca, ưu tiên công bằng, không gãy ca)
+              (Tự động xếp tối đa <strong>2 người/ca</strong>, ưu tiên công bằng, không gãy ca)
             </p>
           </div>
         ) : (
           <div className="generated-state">
-            <div style={{display:'flex', justifyContent:'center', gap:'15px', marginBottom: '15px'}}>
-              <button className="btn-outline" onClick={() => setShowAssignedStats(true)}>
+            <div style={{display:'flex', justifyContent:'center', gap:'15px', marginBottom: '15px', flexWrap: 'wrap'}}>
+              <button
+                className="btn-outline"
+                onClick={() => setShowAssignedStats(true)}
+                style={{fontWeight: 500}}
+              >
                 📊 Xem Thống Kê Phân Công
               </button>
               <button
                 className="btn-generate"
-                style={{backgroundColor: isCurrentWeekSaved ? '#ccc' : '#57534e', cursor: isCurrentWeekSaved ? 'not-allowed' : 'pointer'}}
+                style={{
+                  backgroundColor: isCurrentWeekSaved ? '#ccc' : '#57534e',
+                  cursor: isCurrentWeekSaved ? 'not-allowed' : 'pointer',
+                  fontWeight: 600
+                }}
                 onClick={handleGenerate}
                 disabled={isCurrentWeekSaved}
               >
@@ -771,18 +930,38 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                 disabled={isCurrentWeekSaved}
                 style={{
                   backgroundColor: '#059669',
-                  cursor: isCurrentWeekSaved ? 'not-allowed' : 'pointer'
+                  cursor: isCurrentWeekSaved ? 'not-allowed' : 'pointer',
+                  fontWeight: 600
                 }}
               >
                 {isCurrentWeekSaved ? '✅ Đã Lưu Vào Hệ Thống' : '💾 Lưu Kết Quả Tuần Này'}
               </button>
             </div>
             {isCurrentWeekSaved ? (
-              <div style={{color: '#dc2626', fontSize: '0.9rem', marginBottom: '10px', fontStyle:'italic', fontWeight: 'bold'}}>
+              <div
+                style={{
+                  color: '#dc2626',
+                  fontSize: '0.9rem',
+                  marginBottom: '10px',
+                  fontStyle:'italic',
+                  fontWeight: 'bold'
+                }}
+              >
                 🔒 Lịch tuần này đã được chốt và lưu vào dữ liệu tổng. Không thể thay đổi.
               </div>
             ) : (
-              <div className="text-success" style={{fontWeight: 'bold', fontSize: '1.1rem', display:'flex', alignItems:'center', justifyContent: 'center', gap:'8px', color: '#15803d'}}>
+              <div
+                className="text-success"
+                style={{
+                  fontWeight: 'bold',
+                  fontSize: '1.1rem',
+                  display:'flex',
+                  alignItems:'center',
+                  justifyContent: 'center',
+                  gap:'8px',
+                  color: '#15803d'
+                }}
+              >
                 ✅ Đã tối ưu lịch xong!
               </div>
             )}
@@ -797,12 +976,16 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
             <table className="new-schedule-table">
               <thead>
                 <tr>
-                  <th className="corner-cell" style={{width: '120px'}}>Ca \ Ngày</th>
+                  <th className="corner-cell" style={{width: '120px'}}>
+                    <strong>Ca \ Ngày</strong>
+                  </th>
                   {DAYS_ORDER.map(day => {
                     const { dateStr, isWeekend } = weekDates[day];
                     return (
                       <th key={day} className={`day-header ${isWeekend ? 'weekend-header' : ''}`}>
-                        <div className="day-name">{DAY_LABELS[day]}</div>
+                        <div className="day-name">
+                          <strong>{DAY_LABELS[day]}</strong>
+                        </div>
                         <div className="day-date">{dateStr}</div>
                       </th>
                     );
@@ -813,7 +996,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                 {SHIFTS.map(shift => (
                   <tr key={shift}>
                     <td className={`shift-header shift-row-${shift}`}>
-                      <div className="shift-name">CA {shift}</div>
+                      <div className="shift-name">
+                        <strong>CA {shift}</strong>
+                      </div>
                       <div className="shift-time">{SHIFT_TIMES[shift]}</div>
                     </td>
                     {DAYS_ORDER.map(day => {
@@ -824,17 +1009,25 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                       else if (staffList.length === 1) cellStatusClass = 'single-slot';
 
                       return (
-                        <td key={`${day}-${shift}`} className={`cell-content ${isWeekend ? 'weekend-cell' : ''} ${cellStatusClass}`}>
+                        <td
+                          key={`${day}-${shift}`}
+                          className={`cell-content ${isWeekend ? 'weekend-cell' : ''} ${cellStatusClass}`}
+                        >
                           {staffList.length > 0 ? (
                             <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
                               {staffList.map((name: string) => {
                                 const style = getStaffColor(name);
                                 return (
-                                  <div key={name} className="staff-chip" style={{
-                                    backgroundColor: style.bg,
-                                    border: `1px solid ${style.border}`,
-                                    color: style.text
-                                  }}>
+                                  <div
+                                    key={name}
+                                    className="staff-chip"
+                                    style={{
+                                      backgroundColor: style.bg,
+                                      border: `1px solid ${style.border}`,
+                                      color: style.text,
+                                      fontWeight: 500
+                                    }}
+                                  >
                                     {name}
                                   </div>
                                 );
@@ -859,7 +1052,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
               return (
                 <div key={day} className="mobile-day-card">
                   <div className="mobile-day-header">
-                    <div className="day-name">{DAY_LABELS[day]}</div>
+                    <div className="day-name">
+                      <strong>{DAY_LABELS[day]}</strong>
+                    </div>
                     <div className="day-date">{dateStr}</div>
                   </div>
                   <div className="mobile-shift-list">
@@ -872,7 +1067,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                       return (
                         <div key={`${day}-${shift}`} className="mobile-shift-row">
                           <div className="mobile-shift-label">
-                            <div className="shift-name">Ca {shift}</div>
+                            <div className="shift-name">
+                              <strong>Ca {shift}</strong>
+                            </div>
                             <div className="shift-time">{SHIFT_TIMES[shift]}</div>
                           </div>
                           <div className={`mobile-shift-content ${cellStatusClass}`}>
@@ -887,7 +1084,8 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                                       style={{
                                         backgroundColor: style.bg,
                                         border: `1px solid ${style.border}`,
-                                        color: style.text
+                                        color: style.text,
+                                        fontWeight: 500
                                       }}
                                     >
                                       {name}
