@@ -5,7 +5,7 @@ const LOGO_URL = "/assets/logo.jpg";
 
 // API lưu/lấy lịch (Apps Script Web App URL)
 const SCHEDULE_API_URL =
-  "https://script.google.com/macros/s/AKfycbwT6j0FycmyNMNdpdYiSIpS3LAD1BqDBmab9GfbDHiuyckHjwK4fQdrJtbNKuzUGVmZWQ/exec";
+  "https://script.google.com/macros/s/AKfycbymQZV7rGVHH2rYzcd2_Mp5Y7XG_uiZgladryQXNnfhZZnSlqblS2cQEO3ZhrQmmkSQuA/exec";
 
 // --- Constants & Config ---
 const SHEET_ID = '1GAg6TPB2U7URfTZnEz05IRaAXYrzTFDBFgspOTCLf4Q';
