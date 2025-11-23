@@ -179,27 +179,32 @@
             box-shadow: 0 18px 40px rgba(193, 86, 64, 0.35), 0 0 0 1px rgba(148, 65, 35, 0.7);
             background: linear-gradient(135deg, #b45309, #92400e);
         }
+        /* Nút viền trắng – style đồng bộ với nút cam */
         
         .btn-outline {
-            background-color: white;
-            border-radius: 999px;
-            border: 1px solid rgba(148, 119, 80, 0.45);
-            padding: 9px 20px;
-            font-size: 0.9rem;
-            color: #5e4b35;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 28px;
+            border-radius: 999px;
+            background: #fffdf8;
+            border: 1px solid #e2c7ad;
+            color: #8b3a21;
+            font-size: 0.95rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            box-shadow: 0 10px 24px rgba(193, 86, 64, 0.16);
             cursor: pointer;
-            box-shadow: 0 3px 10px rgba(100, 77, 51, 0.08);
-            transition: all 0.18s ease;
-            font-weight: 500;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
         }
         
         .btn-outline:hover {
-            background-color: #fffbeb;
-            border-color: rgba(202, 138, 4, 0.8);
+            background: #fff3e0;
+            border-color: #d08a4d;
+            color: #8b3a21;
             transform: translateY(-1px);
+            box-shadow: 0 16px 32px rgba(193, 86, 64, 0.22);
         }
         /* LÀM MỚI – xanh, ĐĂNG XUẤT – đỏ */
         

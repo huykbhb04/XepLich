@@ -4,15 +4,16 @@ import { createRoot } from 'react-dom/client';
 const LOGO_URL = "/assets/logo.jpg";
 
 // --- Constants & Config ---
-// Sheet chứa dữ liệu đăng ký (Form responses)
+// Sheet form đăng ký ca
 const SHEET_ID = '1GAg6TPB2U7URfTZnEz05IRaAXYrzTFDBFgspOTCLf4Q';
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
 
-// Sheet dùng để LƯU lịch đã xếp
+// Sheet lưu lịch đã xếp
 const SCHEDULE_SHEET_ID = '1UN06LLfdEN79S5L_7EP5i6Q1AgNU8mOU9teyoUcxIiE';
-const SCHEDULE_CSV_URL = `https://docs.google.com/spreadsheets/d/${SCHEDULE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Schedule`;
+const SCHEDULE_CSV_URL =
+  `https://docs.google.com/spreadsheets/d/${SCHEDULE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Schedule`;
 
-// Apps Script Web App để GHI lịch (POST)
+// Apps Script Web App dùng để GHI lịch vào sheet lịch
 const SCHEDULE_API_URL =
   'https://script.google.com/macros/s/AKfycbymQZV7rGVHH2rYzcd2_Mp5Y7XG_uiZgladryQXNnfhZZnSlqblS2cQEO3ZhrQmmkSQuA/exec';
 
@@ -35,6 +36,9 @@ const SHIFT_TIMES: Record<number, string> = {
   2: '12:30 - 17:30',
   3: '17:30 - 22:30',
 };
+
+// tối đa 2 người/ca
+const MAX_PER_SHIFT = 2;
 
 // --- Default Roster ---
 const DEFAULT_EMPLOYEES = [
@@ -145,14 +149,14 @@ const parseCSV = (text: string) => {
   return rows;
 };
 
-// --- Helper: Normalize Data (Đăng ký từ Google Form Sheet) ---
+// --- Helper: Normalize Data (Form đăng ký) ---
 const normalizeSheetData = (rows: string[][]) => {
   if (rows.length < 2) return [];
 
   const headers = rows[0].map((h) => h.toLowerCase().trim());
   const nameIdx = headers.findIndex((h) => h.includes('tên') || h.includes('name'));
   const reasonIdx = headers.findIndex(
-    (h) => h.includes('lý do') || h.includes('reason') || h.includes('note'),
+    (h) => h.includes('lý do') || h.includes('reason') || h.includes('note')
   );
 
   const dayMapping: Record<string, number> = {};
@@ -174,7 +178,7 @@ const normalizeSheetData = (rows: string[][]) => {
   const singleShiftColIdx = headers.findIndex(
     (h) =>
       (h.includes('ca') || h.includes('lịch') || h.includes('đăng ký') || h.includes('shift')) &&
-      !Object.values(dayMapping).includes(headers.indexOf(h)),
+      !Object.values(dayMapping).includes(headers.indexOf(h))
   );
 
   if (nameIdx === -1) return [];
@@ -191,11 +195,23 @@ const normalizeSheetData = (rows: string[][]) => {
         Object.entries(dayMapping).forEach(([day, idx]) => {
           const cellContent = row[idx]?.toLowerCase() || '';
           if (!cellContent) return;
-          if (cellContent.includes('ca 1') || cellContent.includes('sáng') || cellContent.includes('morning'))
+          if (
+            cellContent.includes('ca 1') ||
+            cellContent.includes('sáng') ||
+            cellContent.includes('morning')
+          )
             parsedSlots.push(`${day}-1`);
-          if (cellContent.includes('ca 2') || cellContent.includes('chiều') || cellContent.includes('afternoon'))
+          if (
+            cellContent.includes('ca 2') ||
+            cellContent.includes('chiều') ||
+            cellContent.includes('afternoon')
+          )
             parsedSlots.push(`${day}-2`);
-          if (cellContent.includes('ca 3') || cellContent.includes('tối') || cellContent.includes('evening'))
+          if (
+            cellContent.includes('ca 3') ||
+            cellContent.includes('tối') ||
+            cellContent.includes('evening')
+          )
             parsedSlots.push(`${day}-3`);
         });
       } else if (singleShiftColIdx !== -1) {
@@ -234,12 +250,14 @@ const normalizeSheetData = (rows: string[][]) => {
 };
 
 type ScheduleType = Record<string, Record<number, string[]>>;
-type HistoryDataType = Record<string, ScheduleType>; // Key: Week Range string
+type HistoryDataType = Record<string, ScheduleType>; // Key: Week Range string;
 
 type Registration = {
   slots: string[];
   reason: string;
 };
+
+type EditingCell = { day: string; shift: number } | null;
 
 // --- Login Component ---
 const LoginScreen = ({ onLogin }: { onLogin: (u: string, p: string) => void }) => {
@@ -260,9 +278,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (u: string, p: string) => void }) =
     <div className="login-container">
       <div className="login-card">
         <img src={LOGO_URL} alt="Giao Cafe Logo" className="app-logo" />
-        <h2 style={{ color: '#c05640', fontFamily: 'serif', marginBottom: '10px', fontWeight: 700 }}>
-          Đăng Nhập Quản Trị
-        </h2>
+        <h2 style={{ color: '#c05640', fontFamily: 'serif', marginBottom: '10px' }}>Đăng Nhập Quản Trị</h2>
         <p style={{ color: '#6b5f53', marginBottom: '30px', fontSize: '0.9rem' }}>
           Vui lòng đăng nhập để truy cập hệ thống xếp lịch
         </p>
@@ -288,7 +304,14 @@ const LoginScreen = ({ onLogin }: { onLogin: (u: string, p: string) => void }) =
             }}
           />
           {error && (
-            <div style={{ color: '#dc2626', marginBottom: '15px', fontSize: '0.9rem', fontWeight: 600 }}>
+            <div
+              style={{
+                color: '#dc2626',
+                marginBottom: '15px',
+                fontSize: '0.9rem',
+                fontWeight: '600',
+              }}
+            >
               ⚠️ {error}
             </div>
           )}
@@ -309,10 +332,16 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
   const weekDates = useMemo(() => getNextWeekDates(), []);
   const currentWeekKey = `${weekDates['Mon'].dateStr} - ${weekDates['Sun'].dateStr}`;
 
-  // 1. Lịch sử đã lưu (từ backend + cache)
+  // 1. Lịch sử đã lưu
   const [history, setHistory] = useState<HistoryDataType>({});
   // 2. Lịch tuần hiện tại
   const [finalSchedule, setFinalSchedule] = useState<ScheduleType | null>(null);
+
+  // Editing
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableSchedule, setEditableSchedule] = useState<ScheduleType | null>(null);
+  const [editingCell, setEditingCell] = useState<EditingCell>(null);
+  const [editingSelection, setEditingSelection] = useState<string[]>([]);
 
   const [showStaffDetails, setShowStaffDetails] = useState(false);
   const [showAssignedStats, setShowAssignedStats] = useState(false);
@@ -321,7 +350,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // --- Load lịch sử từ Google Sheet CSV, fallback localStorage ---
+  // --- Load lịch từ Google Sheet CSV (backend) + cache localStorage ---
   useEffect(() => {
     const loadHistory = async () => {
       try {
@@ -330,8 +359,32 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         const text = await res.text();
         const rows = parseCSV(text);
 
-        if (rows.length < 2) {
-          // Không có dữ liệu trên Sheet -> fallback localStorage
+        if (rows.length >= 2) {
+          const headers = rows[0].map((h) => h.toLowerCase().trim());
+          const weekIdx = headers.findIndex((h) => h.includes('weekkey'));
+          const jsonIdx = headers.findIndex((h) => h.includes('schedulejson'));
+
+          const historyFromSheet: HistoryDataType = {};
+
+          rows.slice(1).forEach((row) => {
+            const wk = row[weekIdx];
+            const json = row[jsonIdx];
+            if (!wk || !json) return;
+            try {
+              historyFromSheet[wk] = JSON.parse(json);
+            } catch {
+              // ignore parse error
+            }
+          });
+
+          setHistory(historyFromSheet);
+          localStorage.setItem('GIAO_ROSTER_HISTORY_V2', JSON.stringify(historyFromSheet));
+
+          if (historyFromSheet[currentWeekKey]) {
+            setFinalSchedule(historyFromSheet[currentWeekKey]);
+          }
+        } else {
+          // Không có dữ liệu trong sheet -> thử đọc localStorage
           const stored = localStorage.getItem('GIAO_ROSTER_HISTORY_V2');
           if (stored) {
             const parsed: HistoryDataType = JSON.parse(stored);
@@ -340,37 +393,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
               setFinalSchedule(parsed[currentWeekKey]);
             }
           }
-          return;
-        }
-
-        const headers = rows[0].map((h) => h.toLowerCase().trim());
-        const weekIdx = headers.findIndex((h) => h.includes('weekkey'));
-        const jsonIdx = headers.findIndex((h) => h.includes('schedulejson'));
-
-        const historyFromSheet: HistoryDataType = {};
-
-        rows.slice(1).forEach((row) => {
-          const wk = row[weekIdx];
-          const json = row[jsonIdx];
-          if (!wk || !json) return;
-          try {
-            historyFromSheet[wk] = JSON.parse(json);
-          } catch (err) {
-            // lịch lỗi thì bỏ qua
-          }
-        });
-
-        setHistory(historyFromSheet);
-
-        // Cache vào localStorage để lần sau load nhanh
-        localStorage.setItem('GIAO_ROSTER_HISTORY_V2', JSON.stringify(historyFromSheet));
-
-        // Nếu tuần hiện tại có trong lịch thì set luôn
-        if (historyFromSheet[currentWeekKey]) {
-          setFinalSchedule(historyFromSheet[currentWeekKey]);
         }
       } catch (err) {
-        console.error('Failed to load history from sheet, fallback to localStorage', err);
+        console.error('Failed to load history from sheet, fallback localStorage', err);
         try {
           const stored = localStorage.getItem('GIAO_ROSTER_HISTORY_V2');
           if (stored) {
@@ -391,7 +416,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 
   const isCurrentWeekSaved = !!history[currentWeekKey];
 
-  // --- Load đăng ký từ Google Sheet (Form) ---
+  // --- Load đăng ký từ Google Sheet form ---
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -537,11 +562,32 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       .sort((a, b) => b.total - a.total);
   }, [finalSchedule, dynamicEmployeeList, history, currentWeekKey]);
 
-  // Thuật toán xếp ca
+  // --- toggle checkbox trong modal edit ---
+  const toggleSelection = (name: string) => {
+    setEditingSelection((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+    );
+  };
+
+  // --- helper: đăng ký theo ca ---
+  const getRegisteredForSlot = (day: string, shift: number): string[] => {
+    const slotKey = `${day}-${shift}`;
+    return Object.entries(registrations)
+      .filter(([_, reg]) => Array.isArray(reg.slots) && reg.slots.includes(slotKey))
+      .map(([name]) => name);
+  };
+
+  // --- helper: danh sách bổ sung (không đăng ký ca) ---
+  const getExtraCandidatesForSlot = (day: string, shift: number): string[] => {
+    const allNames = dynamicEmployeeList.map((e) => e.name);
+    const registered = new Set(getRegisteredForSlot(day, shift));
+    return allNames.filter((name) => !registered.has(name));
+  };
+
+  // Thuật toán xếp ca tự động (toàn tuần)
   const handleGenerate = () => {
     if (isCurrentWeekSaved) return;
 
-    const MAX_PER_SHIFT = 2;
     const newSchedule: ScheduleType = {};
 
     DAYS_ORDER.forEach((day) => {
@@ -551,12 +597,27 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
     const assignedCounts: Record<string, number> = {};
     dynamicEmployeeList.forEach((emp) => (assignedCounts[emp.name] = 0));
 
+    // đếm số ca mỗi ngày cho từng nhân viên -> hạn chế 2 ca/ngày
+    const assignedToday: Record<string, Record<string, number>> = {};
+    DAYS_ORDER.forEach((day) => {
+      assignedToday[day] = {};
+    });
+
+    const sortByFairness = (names: string[]) =>
+      names.sort((a, b) => {
+        const countA = assignedCounts[a] || 0;
+        const countB = assignedCounts[b] || 0;
+        if (countA !== countB) return countA - countB;
+        return Math.random() - 0.5;
+      });
+
     DAYS_ORDER.forEach((day) => {
       SHIFTS.forEach((shift) => {
         const registeredForSlot = Object.entries(registrations)
           .filter(([_, data]: [string, Registration]) => data.slots.includes(`${day}-${shift}`))
           .map(([name]) => name);
 
+        // rule ca 3: không cho (ca1+ca3) mà không có ca2
         const validCandidates = registeredForSlot.filter((name) => {
           if (shift === 3) {
             const hasShift1 = newSchedule[day][1].includes(name);
@@ -568,17 +629,26 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
           return true;
         });
 
-        validCandidates.sort((a, b) => {
-          const countA = assignedCounts[a] || 0;
-          const countB = assignedCounts[b] || 0;
-          if (countA !== countB) return countA - countB;
-          return Math.random() - 0.5;
+        // ưu tiên người chưa làm ca nào trong ngày đó
+        const zeroToday = validCandidates.filter(
+          (name) => (assignedToday[day][name] || 0) === 0
+        );
+        const nonZeroToday = validCandidates.filter(
+          (name) => (assignedToday[day][name] || 0) > 0
+        );
+
+        sortByFairness(zeroToday);
+        sortByFairness(nonZeroToday);
+
+        const selected: string[] = [];
+        [...zeroToday, ...nonZeroToday].forEach((name) => {
+          if (selected.length < MAX_PER_SHIFT) selected.push(name);
         });
 
-        const selected = validCandidates.slice(0, MAX_PER_SHIFT);
         newSchedule[day][shift] = selected;
         selected.forEach((name) => {
           assignedCounts[name] = (assignedCounts[name] || 0) + 1;
+          assignedToday[day][name] = (assignedToday[day][name] || 0) + 1;
         });
       });
     });
@@ -587,12 +657,12 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
     setShowStaffDetails(false);
   };
 
+  // Save lần đầu (từ auto-generate)
   const handleSaveWeek = () => {
     if (!finalSchedule) return;
-    if (isCurrentWeekSaved) return;
 
     const confirmed = window.confirm(
-      `⚠️ XÁC NHẬN LƯU KẾT QUẢ\n\nBạn có chắc chắn muốn lưu lịch của tuần [${currentWeekKey}]?\n\n❗️ LƯU Ý: Sau khi lưu, bạn sẽ KHÔNG THỂ xếp lại lịch cho tuần này nữa. Dữ liệu sẽ được chốt để tính tổng tích lũy.`,
+      `⚠️ XÁC NHẬN LƯU KẾT QUẢ\n\nBạn có chắc chắn muốn lưu lịch của tuần [${currentWeekKey}]?\n\nLịch có thể chỉnh sửa lại sau bằng chức năng "Chỉnh sửa lịch".`
     );
     if (!confirmed) return;
 
@@ -601,11 +671,10 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       [currentWeekKey]: finalSchedule,
     };
 
-    // Cập nhật ngay trong app + cache local
     setHistory(newHistory);
     localStorage.setItem('GIAO_ROSTER_HISTORY_V2', JSON.stringify(newHistory));
 
-    // Gửi dữ liệu lên Apps Script (ghi vào Google Sheet lịch)
+    // Gửi lên Apps Script để lưu vào Google Sheet (Schedule)
     fetch(SCHEDULE_API_URL, {
       method: 'POST',
       headers: {
@@ -619,7 +688,139 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       console.error('Failed to save to backend (Apps Script)', err);
     });
 
-    alert('✅ Đã lưu thành công! Lịch tuần này đã được chốt.');
+    alert('✅ Đã lưu thành công! Lịch tuần này đã được lưu vào hệ thống.');
+  };
+
+  // --- EDIT MODE ---
+
+  const startEditing = () => {
+    if (!finalSchedule) return;
+    // deep clone
+    const clone: ScheduleType = JSON.parse(JSON.stringify(finalSchedule));
+    setEditableSchedule(clone);
+    setIsEditing(true);
+    setEditingCell(null);
+    setEditingSelection([]);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditableSchedule(null);
+    setEditingCell(null);
+    setEditingSelection([]);
+  };
+
+  const handleCellClick = (day: string, shift: number) => {
+    if (!isEditing || !editableSchedule) return;
+
+    let current: string[] = [];
+    if (editableSchedule[day] && Array.isArray(editableSchedule[day][shift])) {
+      current = editableSchedule[day][shift];
+    }
+
+    setEditingSelection(current);
+    setEditingCell({ day, shift });
+  };
+
+  const applyCellEdit = () => {
+    if (!editingCell || !editableSchedule) return;
+    const { day, shift } = editingCell;
+
+    setEditableSchedule((prev) => {
+      if (!prev) return prev;
+      const copy: ScheduleType = { ...prev };
+      if (!copy[day]) {
+        copy[day] = { 1: [], 2: [], 3: [] };
+      } else {
+        copy[day] = { ...copy[day] };
+      }
+      copy[day][shift] = [...editingSelection];
+      return copy;
+    });
+
+    setEditingCell(null);
+    setEditingSelection([]);
+  };
+
+  // gợi ý xếp ca cho 1 ô trong modal
+  const suggestForCurrentEditingSlot = () => {
+    if (!editingCell || !editableSchedule) return;
+    const { day, shift } = editingCell;
+
+    // tổng số ca mỗi người trong tuần (dựa trên lịch đang chỉnh)
+    const weekCounts = calculateShiftCounts(editableSchedule, dynamicEmployeeList);
+
+    // số ca trong ngày đó (trừ ca đang chỉnh)
+    const dayCounts: Record<string, number> = {};
+    SHIFTS.forEach((sh) => {
+      if (sh === shift) return;
+      (editableSchedule[day]?.[sh] || []).forEach((name) => {
+        dayCounts[name] = (dayCounts[name] || 0) + 1;
+      });
+    });
+
+    // ưu tiên người đã đăng ký ca này, nếu không có ai đăng ký -> dùng tất cả NV
+    const registered = getRegisteredForSlot(day, shift);
+    const baseCandidates =
+      registered.length > 0 ? registered : dynamicEmployeeList.map((e) => e.name);
+
+    const sortByFairness = (names: string[]) =>
+      names.sort((a, b) => {
+        const countA = weekCounts[a] || 0;
+        const countB = weekCounts[b] || 0;
+        if (countA !== countB) return countA - countB;
+        return Math.random() - 0.5;
+      });
+
+    const zeroToday = baseCandidates.filter((name) => (dayCounts[name] || 0) === 0);
+    const nonZeroToday = baseCandidates.filter((name) => (dayCounts[name] || 0) > 0);
+
+    sortByFairness(zeroToday);
+    sortByFairness(nonZeroToday);
+
+    const chosen: string[] = [];
+    [...zeroToday, ...nonZeroToday].forEach((name) => {
+      if (chosen.length < MAX_PER_SHIFT) chosen.push(name);
+    });
+
+    setEditingSelection(chosen);
+  };
+
+  const handleSaveEdits = () => {
+    if (!editableSchedule) return;
+
+    const confirmed = window.confirm(
+      `💾 Lưu chỉnh sửa lịch tuần [${currentWeekKey}]?\n\nLịch mới sẽ ghi đè lịch cũ trong hệ thống (Google Sheet).`
+    );
+    if (!confirmed) return;
+
+    const newHistory: HistoryDataType = {
+      ...history,
+      [currentWeekKey]: editableSchedule,
+    };
+
+    setHistory(newHistory);
+    setFinalSchedule(editableSchedule);
+    localStorage.setItem('GIAO_ROSTER_HISTORY_V2', JSON.stringify(newHistory));
+
+    fetch(SCHEDULE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({
+        weekKey: currentWeekKey,
+        schedule: editableSchedule,
+      }),
+    }).catch((err) => {
+      console.error('Failed to save edited schedule to backend', err);
+    });
+
+    setIsEditing(false);
+    setEditingCell(null);
+    setEditingSelection([]);
+
+    alert('✅ Đã lưu chỉnh sửa lịch thành công!');
   };
 
   const handleCloseModal = () => {
@@ -692,6 +893,38 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         )}
       </header>
 
+      {finalSchedule && (
+        <div
+          style={{
+            marginTop: '10px',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            background: isEditing ? '#fef3c7' : '#ecfdf3',
+            border: `1px solid ${isEditing ? '#facc15' : '#22c55e'}`,
+            fontSize: '0.9rem',
+            color: '#4b5563',
+          }}
+        >
+          {isEditing ? (
+            <>
+              ✏️ <strong>ĐANG Ở CHẾ ĐỘ CHỈNH SỬA LỊCH.</strong> Nhấn vào từng ô ca để chọn/bỏ nhân viên. Sau
+              đó bấm <strong>"Lưu chỉnh sửa"</strong> để ghi lại vào hệ thống. Bạn có thể dùng nút{' '}
+              <strong>"Gợi ý xếp ca"</strong> trong mỗi ca để hệ thống đề xuất người phù hợp.
+            </>
+          ) : isCurrentWeekSaved ? (
+            <>
+              ✅ <strong>Lịch tuần này đã được lưu.</strong> Nếu cần điều chỉnh, dùng nút{' '}
+              <strong>"Chỉnh sửa lịch"</strong> bên dưới.
+            </>
+          ) : (
+            <>
+              ℹ️ Lịch đã tạo nhưng <strong>chưa lưu</strong>. Hãy bấm <strong>"Lưu Kết Quả Tuần Này"</strong>{' '}
+              để lưu vào hệ thống.
+            </>
+          )}
+        </div>
+      )}
+
       <div className="dashboard-card">
         <div className="stat-box" onClick={() => setShowStaffDetails(true)}>
           <div className="stat-icon">👥</div>
@@ -731,9 +964,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         <div className="modal-backdrop" onClick={handleCloseModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 style={{ fontFamily: 'serif', color: '#c05640', margin: 0 }}>
-                📋 Tình trạng đăng ký
-              </h2>
+              <h2 style={{ fontFamily: 'serif', color: '#c05640', margin: 0 }}>📋 Tình trạng đăng ký</h2>
               <button className="close-btn" onClick={handleCloseModal}>
                 &times;
               </button>
@@ -753,11 +984,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                       {staff.status === 'not-registered' ? (
                         <span className="badge badge-gray">Chưa ĐK</span>
                       ) : (
-                        <span
-                          className={`badge ${
-                            staff.isLowRegistration ? 'badge-red' : 'badge-green'
-                          }`}
-                        >
+                        <span className={`badge ${staff.isLowRegistration ? 'badge-red' : 'badge-green'}`}>
                           {staff.count} ngày {staff.isLowRegistration ? '(!)' : ''}
                         </span>
                       )}
@@ -788,17 +1015,11 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                         <div className="detail-row">
                           <strong>Trạng thái:</strong>{' '}
                           {staff.status === 'registered' ? (
-                            <span
-                              className="text-success"
-                              style={{ fontWeight: 'bold' }}
-                            >
+                            <span className="text-success" style={{ fontWeight: 'bold' }}>
                               Đã nộp form
                             </span>
                           ) : (
-                            <span
-                              className="text-warning"
-                              style={{ fontWeight: 'bold' }}
-                            >
+                            <span className="text-warning" style={{ fontWeight: 'bold' }}>
                               Chưa nộp form
                             </span>
                           )}
@@ -815,17 +1036,11 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 
                             {staff.isLowRegistration && (
                               <div className="alert-box">
-                                <div
-                                  style={{
-                                    fontWeight: 'bold',
-                                    marginBottom: '5px',
-                                  }}
-                                >
+                                <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
                                   ⚠️ Lưu ý: Đăng ký ít buổi
                                 </div>
                                 <div>
-                                  <strong>Lý do:</strong>{' '}
-                                  {staff.reason || 'Không có lý do'}
+                                  <strong>Lý do:</strong> {staff.reason || 'Không có lý do'}
                                 </div>
                               </div>
                             )}
@@ -881,7 +1096,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
             </div>
             <div style={{ padding: '25px', overflowY: 'auto' }}>
               <p style={{ color: '#666', marginBottom: '20px', fontStyle: 'italic' }}>
-                Danh sách được sắp xếp theo tổng số ca đã làm (bao gồm các tuần trước).
+                Danh sách được sắp xếp từ người làm nhiều ca tích lũy nhất.
               </p>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -908,31 +1123,14 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                 </thead>
                 <tbody>
                   {assignedStats.map((stat) => {
-                    const barWidth = `${
-                      (stat.total / (assignedStats[0]?.total || 1)) * 100
-                    }%`;
+                    const barWidth = `${(stat.total / (assignedStats[0]?.total || 1)) * 100}%`;
                     return (
-                      <tr
-                        key={stat.name}
-                        style={{ borderBottom: '1px solid #e5e7eb' }}
-                      >
-                        <td
-                          style={{
-                            padding: '10px 12px',
-                            fontWeight: 500,
-                            color: '#4b3427',
-                          }}
-                        >
+                      <tr key={stat.name} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '10px 12px', fontWeight: 500, color: '#4b3427' }}>
                           {stat.name}
                         </td>
                         <td style={{ padding: '10px 12px' }}>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                            }}
-                          >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div
                               style={{
                                 flex: 1,
@@ -946,20 +1144,12 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                                 style={{
                                   width: barWidth,
                                   height: '100%',
-                                  background:
-                                    'linear-gradient(90deg, #fb923c, #f97316)',
+                                  background: 'linear-gradient(90deg, #fb923c, #f97316)',
                                   borderRadius: '999px',
                                 }}
                               />
                             </div>
-                            <span
-                              style={{
-                                fontSize: '0.9rem',
-                                fontWeight: 600,
-                              }}
-                            >
-                              {stat.total}
-                            </span>
+                            <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{stat.total}</span>
                           </div>
                           {stat.current > 0 && (
                             <div
@@ -983,20 +1173,196 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         </div>
       )}
 
+      {/* Modal edit 1 ô ca */}
+      {isEditing && editingCell && editableSchedule && (
+        <div className="modal-backdrop" onClick={() => setEditingCell(null)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '540px', maxHeight: '80vh', overflowY: 'auto' }}
+          >
+            <div className="modal-header">
+              <h2 style={{ fontFamily: 'serif', color: '#c05640', margin: 0 }}>
+                ✏️ Chỉnh sửa ca
+              </h2>
+              <button className="close-btn" onClick={() => setEditingCell(null)}>
+                &times;
+              </button>
+            </div>
+            <div style={{ padding: '18px' }}>
+              <p style={{ marginBottom: '8px', fontWeight: 600 }}>
+                {DAY_LABELS[editingCell.day]} - Ca {editingCell.shift} ({SHIFT_TIMES[editingCell.shift]})
+              </p>
+              <p style={{ fontSize: '0.9rem', color: '#6b7280', marginBottom: '12px' }}>
+                Ưu tiên chọn nhân viên đã đăng kí ca này. Có thể bổ sung thêm người hỗ trợ nếu cần.
+              </p>
+
+              {(() => {
+                const registered = getRegisteredForSlot(editingCell.day, editingCell.shift);
+                const extras = getExtraCandidatesForSlot(editingCell.day, editingCell.shift);
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* Nhân viên đã đăng ký */}
+                    <div
+                      style={{
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '12px',
+                        padding: '10px 12px',
+                        background:
+                          'linear-gradient(135deg, rgba(254,243,199,0.7), rgba(255,251,235,0.95))',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          marginBottom: '6px',
+                          color: '#92400e',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <span>✅ Nhân viên đã đăng ký ca này</span>
+                      </div>
+                      {registered.length === 0 ? (
+                        <div
+                          style={{
+                            fontSize: '0.9rem',
+                            fontStyle: 'italic',
+                            color: '#b91c1c',
+                            padding: '4px 2px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Ca làm này không có nhân viên nào đăng kí!
+                        </div>
+                      ) : (
+                        <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
+                          {registered.map((name) => (
+                            <label
+                              key={name}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '4px 2px',
+                                cursor: 'pointer',
+                                fontSize: '0.95rem',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editingSelection.includes(name)}
+                                onChange={() => toggleSelection(name)}
+                              />
+                              <span style={{ fontWeight: 600 }}>{name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bổ sung thêm nhân viên */}
+                    <div
+                      style={{
+                        border: '1px dashed #d1d5db',
+                        borderRadius: '12px',
+                        padding: '10px 12px',
+                        background: '#f9fafb',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          marginBottom: '2px',
+                          color: '#374151',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <span>➕ Nhân viên bổ sung (không đăng ký ca này)</span>
+                      </div>
+                      <p
+                        style={{
+                          margin: '0 0 6px',
+                          fontSize: '0.8rem',
+                          color: '#6b7280',
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        Dùng khi cần người hỗ trợ thêm, hoặc lấp ca trống.
+                      </p>
+                      <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
+                        {extras.map((name) => (
+                          <label
+                            key={name}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '3px 2px',
+                              cursor: 'pointer',
+                              fontSize: '0.9rem',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={editingSelection.includes(name)}
+                              onChange={() => toggleSelection(name)}
+                            />
+                            <span>{name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div
+                style={{
+                  marginTop: '16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={suggestForCurrentEditingSlot}
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  ✨ Gợi ý xếp ca
+                </button>
+
+                <div style={{ flex: 1 }} />
+
+                <button className="btn-outline" onClick={() => setEditingCell(null)}>
+                  Hủy
+                </button>
+                <button className="btn-generate" onClick={applyCellEdit}>
+                  Xong
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="action-area">
         {!finalSchedule ? (
           <div className="initial-state">
             <button className="btn-generate" onClick={handleGenerate}>
               ✨ Tạo & Tối Ưu Lịch
             </button>
-            <p
-              style={{
-                marginTop: '10px',
-                color: '#8d7f71',
-                fontSize: '0.9rem',
-              }}
-            >
-              (Tự động xếp tối đa 2 người/ca, ưu tiên công bằng, không gãy ca)
+            <p style={{ marginTop: '10px', color: '#8d7f71', fontSize: '0.9rem' }}>
+              (Tự động xếp tối đa 2 người/ca, ưu tiên công bằng, hạn chế 1 người làm 2 ca/ngày)
             </p>
           </div>
         ) : (
@@ -1005,66 +1371,61 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
               style={{
                 display: 'flex',
                 justifyContent: 'center',
-                gap: '15px',
-                marginBottom: '15px',
+                gap: '10px',
+                marginBottom: '12px',
                 flexWrap: 'wrap',
               }}
             >
               <button className="btn-outline" onClick={() => setShowAssignedStats(true)}>
                 📊 Xem Thống Kê Phân Công
               </button>
-              <button
-                className="btn-generate"
-                style={{
-                  backgroundColor: isCurrentWeekSaved ? '#ccc' : '#57534e',
-                  cursor: isCurrentWeekSaved ? 'not-allowed' : 'pointer',
-                }}
-                onClick={handleGenerate}
-                disabled={isCurrentWeekSaved}
-              >
-                {isCurrentWeekSaved ? '🔒 Đã Chốt Lịch' : '🔄 Xếp Lại Lịch'}
-              </button>
-              <button
-                className="btn-generate"
-                onClick={handleSaveWeek}
-                disabled={isCurrentWeekSaved}
-                style={{
-                  backgroundColor: '#059669',
-                  cursor: isCurrentWeekSaved ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {isCurrentWeekSaved ? '✅ Đã Lưu Vào Hệ Thống' : '💾 Lưu Kết Quả Tuần Này'}
-              </button>
+
+              {!isEditing && (
+                <button className="btn-outline" onClick={startEditing}>
+                  ✏️ Chỉnh sửa lịch
+                </button>
+              )}
+
+              {!isEditing && (
+                <>
+                  <button
+                    className="btn-generate"
+                    style={{
+                      backgroundColor: isCurrentWeekSaved ? '#ccc' : '#57534e',
+                      cursor: isCurrentWeekSaved ? 'not-allowed' : 'pointer',
+                    }}
+                    onClick={handleGenerate}
+                    disabled={isCurrentWeekSaved}
+                  >
+                    {isCurrentWeekSaved ? '🔒 Đã Chốt Lịch Tự Động' : '🔄 Xếp Lại Lịch'}
+                  </button>
+                  <button
+                    className="btn-generate"
+                    onClick={handleSaveWeek}
+                    style={{
+                      backgroundColor: '#059669',
+                    }}
+                  >
+                    💾 Lưu Kết Quả Tuần Này
+                  </button>
+                </>
+              )}
+
+              {isEditing && (
+                <>
+                  <button
+                    className="btn-generate"
+                    onClick={handleSaveEdits}
+                    style={{ backgroundColor: '#2563eb' }}
+                  >
+                    💾 Lưu chỉnh sửa
+                  </button>
+                  <button className="btn-outline" onClick={cancelEditing}>
+                    Hủy chỉnh sửa
+                  </button>
+                </>
+              )}
             </div>
-            {isCurrentWeekSaved ? (
-              <div
-                style={{
-                  color: '#dc2626',
-                  fontSize: '0.9rem',
-                  marginBottom: '10px',
-                  fontStyle: 'italic',
-                  fontWeight: 'bold',
-                  textAlign: 'center',
-                }}
-              >
-                🔒 Lịch tuần này đã được chốt và lưu vào dữ liệu tổng. Không thể thay đổi.
-              </div>
-            ) : (
-              <div
-                className="text-success"
-                style={{
-                  fontWeight: 'bold',
-                  fontSize: '1.1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  color: '#15803d',
-                }}
-              >
-                ✅ Đã tối ưu lịch xong!
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1084,9 +1445,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                     return (
                       <th
                         key={day}
-                        className={`day-header ${
-                          isWeekend ? 'weekend-header' : ''
-                        }`}
+                        className={`day-header ${isWeekend ? 'weekend-header' : ''}`}
                       >
                         <div className="day-name">{DAY_LABELS[day]}</div>
                         <div className="day-date">{dateStr}</div>
@@ -1103,7 +1462,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                       <div className="shift-time">{SHIFT_TIMES[shift]}</div>
                     </td>
                     {DAYS_ORDER.map((day) => {
-                      const staffList = finalSchedule[day][shift];
+                      const scheduleSource =
+                        isEditing && editableSchedule ? editableSchedule : finalSchedule!;
+                      const staffList = scheduleSource[day][shift];
                       const { isWeekend } = weekDates[day];
                       let cellStatusClass = '';
                       if (staffList.length === 0) cellStatusClass = 'missing-slot';
@@ -1112,9 +1473,10 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                       return (
                         <td
                           key={`${day}-${shift}`}
-                          className={`cell-content ${
-                            isWeekend ? 'weekend-cell' : ''
-                          } ${cellStatusClass}`}
+                          className={`cell-content ${isWeekend ? 'weekend-cell' : ''} ${cellStatusClass} ${
+                            isEditing ? 'cell-editable' : ''
+                          }`}
+                          onClick={() => handleCellClick(day, shift)}
                         >
                           {staffList.length > 0 ? (
                             <div
@@ -1142,7 +1504,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                               })}
                             </div>
                           ) : (
-                            <div className="empty-dash">-</div>
+                            <div className="empty-dash">
+                              {isEditing ? 'Nhấn để chọn' : '-'}
+                            </div>
                           )}
                         </td>
                       );
@@ -1165,7 +1529,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                   </div>
                   <div className="mobile-shift-list">
                     {SHIFTS.map((shift) => {
-                      const staffList = finalSchedule[day][shift];
+                      const scheduleSource =
+                        isEditing && editableSchedule ? editableSchedule : finalSchedule!;
+                      const staffList = scheduleSource[day][shift];
                       let cellStatusClass = '';
                       if (staffList.length === 0) cellStatusClass = 'missing-slot';
                       else if (staffList.length === 1) cellStatusClass = 'single-slot';
@@ -1173,15 +1539,14 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                       return (
                         <div
                           key={`${day}-${shift}`}
-                          className="mobile-shift-row"
+                          className={`mobile-shift-row ${isEditing ? 'cell-editable' : ''}`}
+                          onClick={() => handleCellClick(day, shift)}
                         >
                           <div className="mobile-shift-label">
                             <div className="shift-name">Ca {shift}</div>
                             <div className="shift-time">{SHIFT_TIMES[shift]}</div>
                           </div>
-                          <div
-                            className={`mobile-shift-content ${cellStatusClass}`}
-                          >
+                          <div className={`mobile-shift-content ${cellStatusClass}`}>
                             {staffList.length > 0 ? (
                               <div
                                 style={{
@@ -1208,7 +1573,9 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
                                 })}
                               </div>
                             ) : (
-                              <div className="empty-dash">-</div>
+                              <div className="empty-dash">
+                                {isEditing ? 'Nhấn để chọn' : '-'}
+                              </div>
                             )}
                           </div>
                         </div>
